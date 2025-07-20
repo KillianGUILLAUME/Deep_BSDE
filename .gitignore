@@ -1,0 +1,6 @@
+runs
+results/
+*.png
+*.pt
+.DS_Store
+
