@@ -1,0 +1,75 @@
+import yaml, torch, matplotlib.pyplot as plt
+from pathlib import Path
+from bsde.models import HestonSimulator
+from bsde.payoff import lookback_max
+from bsde.solver import BSDESolver
+
+with open("experiments/config.yaml") as f:
+    config = yaml.safe_load(f)
+
+payoff_fn : lambda S:lookback_max(S, config["payoff"]["K"])
+
+simulator = HestonSimulator(
+    config["simulator"]["S0"],
+    config["simulator"]["K"],
+    config["simulator"]["T"],
+    config["simulator"]["r"],
+    config["simulator"]["v0"],
+    config["simulator"]["kappa"],
+    config["simulator"]["theta"],
+    config["simulator"]["sigma"],
+    config["simulator"]["rho"]
+)
+
+solver = BSDESolver(
+    simulator,
+    config["solver"]["N"],
+    config["solver"]["M"],
+    config["solver"]["L"],
+    config["solver"]["batch_size"],
+    config["solver"]["device"]
+)
+
+solver.net.load_state_dict(torch.load('mod/bsde_lookback_max.pt', map_location="cpu"))
+solver.net.eval()
+
+n_paths = 20_000
+S, v = solver.simulator.sample_paths(n_paths, config["n_steps"], config["T"])
+dt    = config["T"] / config["n_steps"]
+t_grid = torch.linspace(0, config["T"], config["n_steps"] + 1)
+
+
+deltas = torch.empty(config["n_sets"] + 1, n_paths, config["n_steps"])
+
+with torch.no_grad():
+    for i in range(config["n_sets"] + 1):
+        t_i = torch.full((n_paths,), i*dt)
+        _, z = solver.net(t_i, S[i], v[i])
+        deltas[i] = z[:,0]
+
+
+mean_delta = deltas.mean(dim=1)
+std_delta = deltas.std(dim=1)
+
+def plot_delta(t_grid, mean_delta, std_delta):
+    plt.figure(figsize=(10, 6))
+    plt.plot(t_grid, mean_delta, label='Mean Delta', color='blue')
+    plt.fill_between(t_grid, mean_delta - std_delta, mean_delta + std_delta, alpha=0.2, label='Std Dev')
+    plt.title('Average Delta of a Lookback Option along Heston paths')
+    plt.xlabel('Time (t) in years')
+    plt.ylabel('Delta')
+    plt.legend()
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+
+
+plot_delta(t_grid, mean_delta, std_delta)
+
+"""
+
+low delta (<0.25) all along the path, 
+explained by the fact that the hedge residual volatility 
+comes from the exposure of the variance and not the underlying asset.
+
+"""

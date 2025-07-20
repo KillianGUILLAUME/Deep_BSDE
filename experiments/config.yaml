@@ -1,0 +1,27 @@
+# horizon et discrétisation
+T: 1.0
+n_steps: 30           # nb days, approximation
+
+# réseau
+net:
+  hidden: 128
+  depth: 4
+
+# modèle Heston
+model:
+  mu: 0.05
+  kappa: 1.5
+  theta: 0.04
+  sigma: 0.3
+  rho: -0.7
+  s0: 1.0
+  v0: 0.04
+
+# payoff
+payoff:
+  K: 1.0              # strike of lookback max
+
+# optimisation
+lr: .0001
+epochs: 2_000
+batch: 50_000
