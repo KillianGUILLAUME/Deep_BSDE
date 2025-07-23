@@ -37,3 +37,6 @@ If you use this repo, please cite:
   year    = {2025},
   url     = {https://github.com/KillianGUILLAUME/Deep_BSDE}
 }
+
+
+arXiv:1811.01165 
