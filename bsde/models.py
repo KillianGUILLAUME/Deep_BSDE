@@ -1,3 +1,5 @@
+from typing import Optional
+
 import torch
 
 
@@ -52,29 +54,50 @@ class HestonSimulator:
         return S, v
 
 
-class BlackScholesSimulator:
-    r"""
-    Simule (S_t) sous Black-Scholes par schéma d'Euler.
-      dS_t = μ S_t dt + σ S_t dW^S_t
-    """
-
+class BlackScholesMultiSimulator:
     def __init__(
-        self, mu: float, sigma: float, s0: float = 1.0, d=10, device: str = "cpu"
+        self,
+        mu: float,
+        kappa: float,  # Not used in this simulator
+        theta: float,  # Not used in this simulator
+        sigma: float,
+        rho: float,  # Not used in this simulator
+        s0: float = 1.0,
+        v0: float = 0.0,  # Not used in this simulator
+        d: int = 10,
+        device: str = "cpu",
     ):
-        self.mu, self.sigma, self.s0, self.d = mu, sigma, s0, d
+        self.mu = mu
+        self.sigma = sigma
+        self.s0 = s0
+        self.d = d
         self.device = torch.device(device)
 
-    def sample_paths(self, n_paths: int, n_steps: int, T: float):
+    def sample_paths(
+        self,
+        n_paths: int,
+        n_steps: int,
+        T: float,
+        dW: Optional[torch.Tensor] = None,
+    ) -> torch.Tensor:
         dt = T / n_steps
         sqrt_dt = dt**0.5
-        drift = -0.5 * self.sigma**2 * dt
+        drift = (self.mu - 0.5 * self.sigma**2) * dt
 
-        dW_s = torch.randn(n_steps, n_paths, self.d, device=self.device) * sqrt_dt
+        if dW is None:
+            dW = torch.randn(n_steps, n_paths, self.d, device=self.device) * sqrt_dt
+        else:
+            assert dW.shape == (
+                n_steps,
+                n_paths,
+                self.d,
+            ), f"Expected dW shape {(n_steps, n_paths, self.d)}, got {dW.shape}"
 
         S = torch.full((n_steps + 1, n_paths, self.d), self.s0, device=self.device)
 
         for t in range(n_steps):
-            S[t + 1] = S[t] * torch.exp((drift) * dt + self.sigma * dW_s[t])
+            S[t + 1] = S[t] * torch.exp(drift + self.sigma * dW[t])
 
-        assert not torch.isnan(S).any(), "S contains NaN values"
+        if torch.isnan(S).any():
+            raise ValueError("NaN detected in simulated paths")
         return S

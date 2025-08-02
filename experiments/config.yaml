@@ -1,6 +1,6 @@
 # horizon et discrétisation
 T: 1.0
-n_steps: 30           # nb days, approximation
+n_steps: 60           # nb days, approximation
 
 # réseau
 net:
@@ -16,10 +16,12 @@ model:
   rho: -0.7
   s0: 1.0
   v0: 0.04
+  d: 10
 
 # payoff
 payoff:
   K: 1.0              # strike of lookback max
+
 
 # optimisation
 lr: .0001

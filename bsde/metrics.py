@@ -45,7 +45,7 @@ def delta_hedge(
 
     for k in range(n_steps):
         if r:
-            cash *= torch.exp(torch.tensor(-r * T, device=device))
+            cash *= torch.exp(torch.tensor(r * dt, device=device))
 
         t_k = torch.full((n_paths,), k * dt, device=device)
         y, z = net(t_k, S[k], v[k])
@@ -55,7 +55,7 @@ def delta_hedge(
         pos = new_delta
 
     if r:
-        cash *= torch.exp(torch.tensor(-r * T, device=device))
+        cash *= torch.exp(torch.tensor(r * dt, device=device))
 
     pnl = cash + pos * S[-1] - payoff_fn(S)
 
@@ -92,30 +92,85 @@ def dv_hedge(
     S, v = simulator.sample_paths(n_paths, n_steps, T)
     dt = T / n_steps
 
+    sigma = simulator.sigma
+    sqrt_v = v[0].sqrt().clamp_(min=1e-8)
+
     t0 = torch.zeros(n_paths, device=device)
     y, z = net(t0, S[0], v[0])
-    pos_s = z[:, 0]
-    pos_v = z[:, 1]
+
+    pos_s = z[:, 0] / (sigma * S[0])
+    pos_v = z[:, 1] / (sigma * sqrt_v)
 
     cash = y - pos_s * S[0] - pos_v * v[0]
 
     for k in range(1, n_steps):
         if r:
-            cash *= torch.exp(torch.tensor(-r * dt, device=device))
+            cash *= torch.exp(torch.tensor(r * dt, device=device))
 
         t_k = torch.full((n_paths,), k * dt, device=device)
         y, z = net(t_k, S[k], v[k])
-
-        new_pos_s = z[:, 0]
-        new_pos_v = z[:, 1]
+        sqrt_v = v[k + 1].sqrt().clamp_(min=1e-8)
+        new_pos_s, new_pos_v = z[:, 0] / (sigma * S[k + 1]), z[:, 1] / (sigma * sqrt_v)
 
         cash -= (new_pos_s - pos_s) * S[k] + (new_pos_v - pos_v) * v[k]
-        pos_s = new_pos_s
-        pos_v = new_pos_v
+        pos_s, pos_v = new_pos_s, new_pos_v
 
         if r:
-            cash *= torch.exp(torch.tensor(-r * dt, device=device))
+            cash *= torch.exp(torch.tensor(r * dt, device=device))
 
         pnl = cash + pos_s * S[-1] + pos_v * v[-1] - payoff_fn(S)
 
         return pnl.cpu()
+
+
+@torch.no_grad()
+def delta_hedge_BS(
+    simulator,
+    net,
+    payoff_fn,
+    n_paths=config["batch"],
+    n_steps=config["n_steps"],
+    T=config["T"],
+    r=0.0,
+    device="cpu",
+):
+    """return p&l distribution for Black-Scholes model
+
+    args:
+        simulator: BlackScholesMultiSimulator
+        net: FeedForwardNNBS
+        payoff_fn: callable
+        n_paths (int): Number of paths to simulate.
+        n_steps (int): Number of time steps in each path.
+        T (float): Time horizon for the simulation.
+        r (float): Risk-free rate, used for discounting in payoff calculation.
+    """
+    S = simulator.sample_paths(n_paths, n_steps, T)
+    dt = T / n_steps
+    sigma = simulator.sigma
+
+    t0 = torch.zeros(n_paths, device=device)
+    y, z = net(t0, S[0])
+
+    pos = z / (sigma * S[0])
+    cash = y - (pos * S[0]).sum(dim=1)
+
+    for k in range(n_steps):
+        if r:
+            cash *= torch.exp(torch.tensor(r * dt, device=device))
+
+        if k < n_steps - 1:
+            t_k = torch.full((n_paths,), (k + 1) * dt, device=device)
+            _, z = net(t_k, S[k + 1])
+            next_pos = z / (sigma * S[k + 1])
+
+            cash -= ((next_pos - pos) * S[k + 1]).sum(dim=1)
+            pos = next_pos
+
+    if r:
+        cash *= torch.exp(torch.tensor(r * dt, device=device))
+
+    pnl = cash + (pos * S[-1]).sum(dim=1) - payoff_fn(S)
+    print("moins")
+
+    return pnl.cpu()

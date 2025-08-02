@@ -6,16 +6,24 @@ def lookback_max(S_paths, strike=1):
     return torch.clamp(max_s - strike, min=0.0)
 
 
-def basket_call(S, K=1.0):
+def basket_call(
+    S: torch.Tensor, strike: float = 1.0, weights: torch.Tensor = None
+) -> torch.Tensor:
     """
     Basket call option payoff function.
 
     Args:
-        S (torch.Tensor): Tensor of shape (n_paths, n_assets) representing asset prices.
-        K (float): Strike price for the basket call option.
+        S (torch.Tensor): Asset prices, shape (n_steps, n_paths, n_assets).
+        K (float): Strike price.
+        weights (torch.Tensor): Weights for each asset, shape (n_assets,).
 
     Returns:
-        torch.Tensor: Payoff for each path, shape (n_paths,).
+        torch.Tensor: Payoff values, shape (n_paths,).
     """
-    mean_S = S.mean(dim=1)
-    return torch.clamp(mean_S - K, min=0.0)
+    S_T = S[-1]
+    d = S_T.shape[-1]
+    if weights is None:
+        weights = torch.full((d,), 1.0 / d, device=S.device)
+
+    basket_price = (S_T * weights).sum(-1)
+    return torch.clamp(basket_price - strike, min=0.0)

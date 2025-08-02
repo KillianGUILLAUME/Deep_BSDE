@@ -4,17 +4,16 @@ import yaml
 
 from bsde.models import HestonSimulator
 
-# Charger la config
 with open("experiments/config.yaml") as f:
     config = yaml.safe_load(f)
 
-# Paramètres
+# parameters
 T = config["T"]
 n_steps = config["n_steps"]
 n_paths = config["batch"]
 params = config["model"]
 
-# Simulateur Heston
+
 simulator = HestonSimulator(**params, device="cpu")
 
 
