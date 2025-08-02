@@ -23,8 +23,8 @@ from experiments, we have :
 -delta_hedge : to ensure that the Y_0 value learnt by the network is supposed to be the option's risk-neutral value.
 
 TODO :
-Black-Scholes d-dimensional, and run the neural network, compare it with the monte-carlo methods.
-Do a grid search with several dimensions, plot the convergence rates in terms of times.
+
+Do a grid search with several dimensions, plot the convergence rates in terms of times (with Black-Scholes model)
 
 Optimize parameters with Ray Tune or Optuna.
 
@@ -40,3 +40,4 @@ If you use this repo, please cite:
 
 
 arXiv:1811.01165 
+
